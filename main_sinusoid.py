@@ -5,7 +5,6 @@ from models.neuralprocess import NeuralProcess
 from models.neuralprocess_rev import NeuralProcess_rev
 from models.attentiveNP import AttentiveNP
 from models.attentiveNP_rev import AttentiveNP_rev
-from models.attentiveNP_det import AttentiveNP_det
 from trainer import Trainer_sinusoid
 from evaluator import Evaluator_sinusoid
 from datasets.Sinusoid.sinusoid import SineData
@@ -23,25 +22,18 @@ parser.add_argument('--test-phase', type=boolean_string, default=False)
 parser.add_argument('--epochs', type=int, default=1500)
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--gpu-num', type=int, default=0)
-parser.add_argument('--cv-idx', type=int, default=0, choices=[0, 1, 2, 3, 4])
 
-parser.add_argument('--model-type', type=str, default='np_rev', choices=['np', 'np_rev', 'anp', 'anp_rev'])
+parser.add_argument('--model-type', type=str, default='anp', choices=['np', 'np_rev', 'anp', 'anp_rev'])
 parser.add_argument('--h-size', type=int, default=128)
 
 parser.add_argument('--x-size', type=int, default=1)
 parser.add_argument('--num-full-x', type=int, default=100)
+
 parser.add_argument('--task', type=str, default='interpolation', choices=['extrapolation', 'interpolation'])
 parser.add_argument('--sample-strategy', type=int, default=3, choices=[1, 2, 3])
-parser.add_argument('--num-context', type=int, default=50)
-parser.add_argument('--num-target', type=int, default=50)
-parser.add_argument('--sample-context', type=boolean_string, default=True,
-                    help='If True, context points are randomly sampled')
-parser.add_argument('--sample-num-target', type=boolean_string, default=True,
-                    help='If True, the number and the position of target points are randomly sampled')
-parser.add_argument('--sample-pos-target', type=boolean_string, default=True,
-                    help='If --sample-num-target is False and --sample-pos-target is True, the number of targets is '
-                         'fixed but their position is randomly chosen.')
 
+# only the case when using saved data
+parser.add_argument('--cv-idx', type=int, default=0, choices=[0, 1, 2, 3, 4])
 parser.add_argument('--num-data', type=int, default=3000, choices=[1000, 3000])
 parser.add_argument('--noisy-data', type=boolean_string, default=True)
 parser.add_argument('--diverse-data', type=boolean_string, default=True)
@@ -56,12 +48,12 @@ if args.model_type == 'anp':
     NP = AttentiveNP(args).to(device)
 elif args.model_type == 'anp_rev':
     NP = AttentiveNP_rev(args).to(device)
-elif args.model_type == 'anp_det':
-    NP = AttentiveNP_det(args).to(device)
 elif args.model_type == 'np':
     NP = NeuralProcess(args).to(device)
-else:
+elif args.model_type == 'np_rev':
     NP = NeuralProcess_rev(args).to(device)
+else:
+    print('Incorrect model type')
 # pytorch_total_params = sum(p.numel() for p in NP.parameters())
 # print(pytorch_total_params)
 # exit()
