@@ -20,40 +20,40 @@ class AttentiveNP(nn.Module):
         self.dec = Decoder(self.x_size, self.h_size, self.z_size)
 
     def forward(self, trajs, times, context_idx, target_idx, training=True):
-        both_idx = np.concatenate([context_idx, target_idx])
+        both_idx = np.concatenate([context_idx, target_idx])  # 1 3 2 4
         if training:
-            value_for_attn = self.det_enc(times[context_idx], trajs[:, context_idx, :])  # BS x traj len x Hidden Dim
+            value_for_attn = self.det_enc(times[context_idx], trajs[:, context_idx, :])  # BS x traj len x Hidden Dim  / 1 3
 
-            emb_x = self.emb_fn(times[both_idx].unsqueeze(-1))  # traj len x Emb Dim
-            key_for_attn = emb_x[:len(context_idx), :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED
-            query_for_attn = emb_x.repeat(trajs.size(0), 1, 1)  # BS x TL x ED
+            emb_x = self.emb_fn(times[both_idx].unsqueeze(-1))  # traj len x Emb Dim  /  1 3 2 4
+            key_for_attn = emb_x[:len(context_idx), :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED  / 1 3
+            query_for_attn = emb_x.repeat(trajs.size(0), 1, 1)  # BS x TL x ED  / 1 3 2 4
 
-            attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)
+            attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)  # 1 3 2 4
 
-            mu_all, sigma_all = self.lat_enc(times[both_idx], trajs[:, both_idx, :])
-            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
+            mu_all, sigma_all = self.lat_enc(times[both_idx], trajs[:, both_idx, :])  # 1 3 2 4
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])  # 1 3
 
-            epsilon = torch.randn(sigma_all.size()).to(self.device)
+            epsilon = torch.randn(sigma_all.size()).to(self.device)  # 1 3 2 4
             z = mu_all + sigma_all * epsilon
 
-            x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)
+            x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)  # 1 3 2 4
 
             return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
         else:
-            value_for_attn = self.det_enc(times[context_idx], trajs[:, context_idx, :])  # BS x traj len x Hidden Dim
+            value_for_attn = self.det_enc(times[context_idx], trajs[:, context_idx, :])  # BS x traj len x Hidden Dim  / 1 3
 
-            emb_x = self.emb_fn(times[both_idx].unsqueeze(-1))  # traj len x Emb Dim
-            key_for_attn = emb_x[:len(context_idx), :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED
-            query_for_attn = emb_x.repeat(trajs.size(0), 1, 1)  # BS x TL x ED
+            emb_x = self.emb_fn(times[both_idx].unsqueeze(-1))  # traj len x Emb Dim  / 1 3 2 4
+            key_for_attn = emb_x[:len(context_idx), :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED  / 1 3
+            query_for_attn = emb_x.repeat(trajs.size(0), 1, 1)  # BS x TL x ED  / 1 3 2 4
 
-            attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)
+            attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)  # 1 3 2 4
 
-            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])  # 1 3
 
-            epsilon = torch.randn(sigma_context.size()).to(self.device)
-            z = mu_context + sigma_context * epsilon
+            epsilon = torch.randn(sigma_context.size()).to(self.device)  # 1 3
+            z = mu_context + sigma_context * epsilon  # 1 3
 
-            x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)
+            x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)  # 1 3 2 4
 
             return x_mu, x_sigma
 

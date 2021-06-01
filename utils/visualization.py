@@ -1,19 +1,38 @@
 import os
+import numpy as np
 from matplotlib import pyplot as plt
 
 
-def vis_sinusoid_traj(trajs, times, pred, epoch, exp_name, val=None):
-    trajs = trajs.cpu().detach().numpy()
-    times = times.cpu().detach().numpy()
-    plt.xlim(-0.2, 10.1)
-    plt.ylim(-1.71, 1.71)
-    plt.scatter(times[0], trajs[0])  # starting points
-    plt.plot(times, trajs)
-    plt.axvline(x=4.9, linestyle=':')
+def vis_sinusoid_traj(trajs_c, times_c, trajs_t, times_t, pred_c, pred_t, epoch, exp_name, val=None):
+    trajs_c = trajs_c.cpu().detach().numpy()  # 1 3
+    times_c = times_c.cpu().detach().numpy()  # 1 3
+    trajs_t = trajs_t.cpu().detach().numpy()  # 2 4
+    times_t = times_t.cpu().detach().numpy()  # 2 4
+    pred_c = pred_c.cpu().detach().numpy()
+    pred_t = pred_t.cpu().detach().numpy()
 
-    pred = pred.cpu().detach().numpy()
-    plt.plot(times, pred, color='red')
-    plt.scatter(times, trajs, color='black')
+    times = np.concatenate([times_c, times_t])
+    trajs = np.concatenate([trajs_c, trajs_t])
+    pred = np.concatenate([pred_c, pred_t])
+
+    sort_idx = np.argsort(times)
+    times = times[sort_idx]
+    trajs = trajs[sort_idx]
+    pred = pred[sort_idx]
+
+    plt.xlim(-0.2, 10.1)
+    plt.ylim(-1.91, 1.91)
+    plt.plot(times, trajs, color='black', label='Ground truth', alpha=0.6)
+    plt.plot(times, pred, color='red', label='Predictive trajectory', alpha=0.6)
+    # plt.axvline(x=4.9, linestyle=':')
+
+    plt.scatter(times_c, trajs_c, color='black', label='Context point', alpha=0.6)
+    plt.scatter(times_t, trajs_t, color='red', label='Target point', alpha=0.6)
+
+    plt.legend(fontsize='xx-small', bbox_to_anchor=(0, 1.02, 1, 0.2), loc="lower left",
+               mode="expand", borderaxespad=0, ncol=4)
+
+    plt.title(f'Num contexts: {len(trajs_c)}, Num targets: {len(trajs_t)}', fontsize='xx-small', y=-0.1)
 
     epoch = str(epoch)
     epoch = (3-len(epoch)) * '0' + epoch

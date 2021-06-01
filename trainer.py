@@ -17,6 +17,7 @@ class Trainer_sinusoid:
     def __init__(self, args, model):
         self.exp_name = args.exp_name
         self.model = model
+        self.task = args.task
         self.noisy_data = args.noisy_data
         self.num_epochs = args.epochs
         self.cv_idx = args.cv_idx
@@ -28,6 +29,7 @@ class Trainer_sinusoid:
         self.num_context = args.num_context
         self.num_target = args.num_target
 
+        self.sample_strategy = args.sample_strategy
         self.sample_context = args.sample_context
         self.sample_num_target = args.sample_num_target
         self.sample_pos_target = args.sample_pos_target
@@ -127,49 +129,78 @@ class Trainer_sinusoid:
 
             # sampling num of context / target
 
-            if (self.sample_context==True) & (self.sample_num_target==True):
-                # n~U(0, 50)
-                num_context = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
-                # num_context = 50
-                context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), num_context, replace=False)
-                context_idx.sort()
+            if self.task == 'extrapolation':
+                if (self.sample_context==True) & (self.sample_num_target==True):
+                    # n~U(0, 50)
+                    num_context = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
+                    # num_context = 50
+                    context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), num_context, replace=False)
+                    context_idx.sort()
 
-                num_target = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
-                # num_target = 50
-                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
-                                              num_target, replace=False)
-                target_idx.sort()
-            elif (self.sample_context==False) & (self.sample_num_target==True):
-                context_idx = np.arange(0, 50, 2)
-                num_target = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
-                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
-                                              num_target, replace=False)
-                target_idx.sort()
-            elif self.sample_context==False:
-                if self.sample_pos_target == True:
-                    context_idx = np.arange(0, 50, 2)
-                    num_target = 25
+                    num_target = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
+                    # num_target = 50
                     target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
                                                   num_target, replace=False)
                     target_idx.sort()
-                elif self.sample_pos_target == False:
+                elif (self.sample_context==False) & (self.sample_num_target==True):
                     context_idx = np.arange(0, 50, 2)
-                    target_idx = np.arange(50, 100, 2)
+                    num_target = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
+                    target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                                  num_target, replace=False)
+                    target_idx.sort()
+                elif self.sample_context==False:
+                    if self.sample_pos_target == True:
+                        context_idx = np.arange(0, 50, 2)
+                        num_target = 25
+                        target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                                      num_target, replace=False)
+                        target_idx.sort()
+                    elif self.sample_pos_target == False:
+                        context_idx = np.arange(0, 50, 2)
+                        target_idx = np.arange(50, 100, 2)
+                else:
+                    print('Incorrect sampling condition for extrapolation task!')
+                    exit()
+            elif self.task == 'interpolation':
+                if self.sample_strategy == 1:
+                    num_context = int(self.num_full / 2)  # 50
+                    context_idx = np.arange(0, self.num_full, 2)
+                    target_idx = np.arange(1, self.num_full, 2)
+
+                elif self.sample_strategy == 2:
+                    num_context = int(int(self.num_full/ 2) / 2)  # 25
+                    num_target = int(int(self.num_full/ 2) / 2)  # 25
+                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
+                    context_idx = all_idx[:num_context]  # 1 3
+                    target_idx = all_idx[num_context:]  # 2 4
+
+                elif self.sample_strategy == 3:
+                    num_context = np.random.choice(np.arange(3, self.num_full), 1)[0]  # n~U(3, 100)
+                    num_target = np.random.choice(np.arange(0, self.num_full - num_context), 1)[0]  # m~n+U(0, 100-n)
+                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # m + n
+                    context_idx = all_idx[:num_context]
+                    target_idx = all_idx[num_context:]
+
+                else:
+                    print('Incorrect sampling strategy')
+
+
             else:
-                print('Incorrect condition!')
-                exit()
+                print('Incorrect task condition!')
 
 
 
-            both_idx = np.concatenate([context_idx, target_idx])
+            both_idx = np.concatenate([context_idx, target_idx])  # 1 3 2 4
 
             self.optimizer.zero_grad()
 
             pred_mu, pred_sigma, mu_all, \
             sigma_all, mu_context, sigma_context = self.model(trajs, times, context_idx, target_idx, training=True)
+            # 1 3 2 4: pred_mu pred_sigma mu_all sigma_all
+            # 1 3: mu_context sigma_context
 
             # mse_loss = torch.mean(torch.pow(pred - trajs, 2))
-            mse_loss = log_normal_pdf(trajs[:, both_idx, :], pred_mu, pred_sigma).mean()
+            mse_loss = log_normal_pdf(trajs[:, both_idx, :], pred_mu, pred_sigma).mean()  # 1 3 2 4
 
             kl_loss = kl_divergence(mu_all, sigma_all, mu_context, sigma_context)
 
@@ -190,8 +221,10 @@ class Trainer_sinusoid:
         self.train_kl /= self.train_instance_num
 
         if (epoch + 1) % 2 == 0:
-            vis_sinusoid_traj(trajs[0, both_idx, 0], times[both_idx], pred_mu[0, :, 0],
-                              epoch, '/' + str(self.exp_name) + '/')
+            vis_sinusoid_traj(trajs[0, context_idx, 0], times[context_idx],
+                              trajs[0, target_idx, 0], times[target_idx],
+                              pred_mu[0, :num_context, 0], pred_mu[0, num_context:, 0],
+                              epoch, '/' + str(self.exp_name) + '/', val=True)
 
     def _validation_phase(self, epoch):
         print("Validation phase")
@@ -211,16 +244,25 @@ class Trainer_sinusoid:
                 trajs = b[:, :, 2:].float().to(self.device)
 
                 # sampling num of context / target
+                if self.task == 'extrapolation':
+                    # n~U(0, 50)
+                    context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), int(self.num_full / 2),
+                                                   replace=False)
+                    context_idx.sort()
+                    target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                                  int(self.num_full / 2), replace=False)
+                    target_idx.sort()
+                elif self.task == 'interpolation':
+                    num_context = 25
+                    num_target = 25
+                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)
+                    context_idx = all_idx[:num_context]  # 1 3
+                    target_idx = all_idx[num_context:]  # 2 4
+                else:
+                    print('Incorrect task condition!')
 
-                # n~U(0, 50)
-                context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), int(self.num_full / 2),
-                                               replace=False)
-                context_idx.sort()
-                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
-                                              int(self.num_full / 2), replace=False)
-                target_idx.sort()
+
                 both_idx = np.concatenate([context_idx, target_idx])
-
                 pred_mu, pred_sigma, mu_all, sigma_all, mu_context, sigma_context = self.model(trajs, times,
                                                                                                context_idx, target_idx,
                                                                                                training=True)
@@ -278,8 +320,10 @@ class Trainer_sinusoid:
                 }, "./save/{}/1500_best_model".format(self.exp_name))
 
         if (epoch + 1) % 2 == 0:
-            vis_sinusoid_traj(trajs[0, :, 0], times, pred_mu[0, :, 0],
-                              epoch, '/' + str(self.exp_name) + '/', True)
+            vis_sinusoid_traj(trajs[0, context_idx, 0], times[context_idx],
+                              trajs[0, target_idx, 0], times[target_idx],
+                              pred_mu[0, :num_context, 0], pred_mu[0, num_context:, 0],
+                              epoch, '/' + str(self.exp_name) + '/')
 
     def _logger_scalar(self, epoch):
         self.writer.add_scalar('train_loss', self.train_loss, epoch)
