@@ -2,6 +2,7 @@ import os
 import torch
 import numpy as np
 import pandas as pd
+import pickle
 from torch.utils.data import DataLoader
 from datasets.Sinusoid.sinusoid import sinusoid_dataset, sinusoid_collate
 
@@ -16,40 +17,57 @@ class Evaluator_sinusoid:
         self.num_data = args.num_data
         self.diverse = args.diverse_data
 
-        self._data_indexing(self.cv_idx)
-        self._load_dataloader()
+        self.num_full = args.num_full_x
+        self.num_context = args.num_context
+        self.num_target = args.num_target
+
+        # self._data_indexing(self.cv_idx)
+        # self._load_dataloader()
+        self._load_dataloader_test()
         self._load_checkpoint()
         self._make_folder()
 
-    def _data_indexing(self, cv_idx):
-        idx_list = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
-        data_idx_num = idx_list[cv_idx]
-        i = data_idx_num[0]
+    # def _data_indexing(self, cv_idx):
+    #     idx_list = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
+    #     data_idx_num = idx_list[cv_idx]
+    #     i = data_idx_num[0]
+    #
+    #     if self.num_data == 1000:
+    #         test_range = range(200 * i, 200 * (i + 1))
+    #     elif self.num_data == 3000:
+    #         test_range = range(600 * i, 600 * (i + 1))
+    #
+    #     self.test_idx = np.array(test_range)
+    #
+    # def _load_dataloader(self):
+    #     if self.noisy_data:
+    #         if self.num_data == 1000:
+    #             data_path = './datasets/Sinusoid/sinusoid_new_noisy.csv'
+    #         else:
+    #             if self.diverse:
+    #                 data_path = './datasets/Sinusoid/sinusoid_noisy_div_3000.csv'
+    #             else:
+    #                 data_path = './datasets/Sinusoid/sinusoid_noisy_3000.csv'
+    #     else:
+    #         data_path = './datasets/Sinusoid/sinusoid_new_noiseless.csv'
+    #     data_test = sinusoid_dataset(data_path=data_path, idx=self.test_idx)
+    #     self.dl_test = DataLoader(dataset=data_test, shuffle=False, collate_fn=sinusoid_collate,
+    #                               batch_size=len(data_test))
 
-        if self.num_data == 1000:
-            test_range = range(200 * i, 200 * (i + 1))
-        elif self.num_data == 3000:
-            test_range = range(600 * i, 600 * (i + 1))
-
-        self.test_idx = np.array(test_range)
-
-    def _load_dataloader(self):
-        if self.noisy_data:
-            if self.num_data == 1000:
-                data_path = './datasets/Sinusoid/sinusoid_new_noisy.csv'
-            else:
-                if self.diverse:
-                    data_path = './datasets/Sinusoid/sinusoid_noisy_div_3000.csv'
-                else:
-                    data_path = './datasets/Sinusoid/sinusoid_noisy_3000.csv'
-        else:
-            data_path = './datasets/Sinusoid/sinusoid_new_noiseless.csv'
-        data_test = sinusoid_dataset(data_path=data_path, idx=self.test_idx)
-        self.dl_test = DataLoader(dataset=data_test, shuffle=False, collate_fn=sinusoid_collate,
-                                  batch_size=len(data_test))
+    def _load_dataloader_test(self):
+        f = open('datasets/Sinusoid/test_data.pickle', 'rb')
+        data_test = pickle.load(f)
+        f.close()
+        self.dl_test = DataLoader(dataset=data_test, shuffle=False, batch_size=len(data_test))
 
     def _load_checkpoint(self):
-        checkpoint = torch.load('./save/{}/1500_best_model'.format(self.exp_name))
+        try:
+            checkpoint = torch.load('./save/{}/1500_best_model'.format(self.exp_name))
+        except:
+            try:
+                checkpoint = torch.load('./save/{}/1000_best_model'.format(self.exp_name))
+            except:
+                checkpoint = torch.load('./save/{}/500_best_model'.format(self.exp_name))
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.best_epoch = checkpoint['best_epoch']
 
@@ -66,14 +84,32 @@ class Evaluator_sinusoid:
         self.test_instance_num = 0
         self.test_mse = 0
         self.test_kl = 0
+        self.mse_context = 0
+        self.mse_target = 0
 
         with torch.no_grad():
             for i, b in enumerate(self.dl_test):
-                times = b["time"].float().to(self.device)
-                trajs = b["traj"].float().to(self.device)
+                # times = b["time"].float().to(self.device)
+                # trajs = b["traj"].float().to(self.device)
+                b = torch.stack(b, 2).squeeze()
+                times = b[0, :, 1].float().to(self.device)
+                trajs = b[:, :, 2:].float().to(self.device)
 
-                pred_mu, pred_sigma = self.model(trajs, times, training=False)
-                mse_loss = torch.mean(torch.pow(pred_mu - trajs, 2))
+                # n~U(0, 50)
+                context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), int(self.num_full / 2),
+                                               replace=False)
+                context_idx.sort()
+                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                              int(self.num_full / 2), replace=False)
+                target_idx.sort()
+                both_idx = np.concatenate([context_idx, target_idx])
+
+
+                pred_mu, pred_sigma = self.model(trajs, times, context_idx, target_idx,
+                                                 training=False)
+                mse_loss = torch.mean(torch.pow(pred_mu - trajs[:, both_idx, :], 2))
+                self.mse_context += torch.mean(torch.pow(pred_mu[:, :len(context_idx), :] - trajs[:, :len(context_idx), :], 2))
+                self.mse_target += torch.mean(torch.pow(pred_mu[:, len(context_idx):, :] - trajs[:, len(context_idx):, :], 2))
                 kl_loss = 0.
 
                 loss = mse_loss + kl_loss
@@ -88,6 +124,7 @@ class Evaluator_sinusoid:
             self.test_mse /= self.test_instance_num
             self.test_kl /= self.test_instance_num
 
+
     def run(self):
         self._test_phase()
 
@@ -97,7 +134,8 @@ class Evaluator_sinusoid:
         df_file_name = "./test_results/{}/sinusoid.csv".format(self.exp_name)
         df_res = pd.DataFrame(
             {"Name": [self.exp_name], "Loss": [self.test_loss], "best_epoch": [self.best_epoch],
-             "cv-idx": [self.cv_idx], "MSE": [self.test_mse], "KL": [self.test_kl]})
+             "cv-idx": [self.cv_idx], "MSE": [self.test_mse], "KL": [self.test_kl],
+             "context_mse": [self.mse_context.item()], "target_mse": [self.mse_target.item()]})
 
         if os.path.isfile(df_file_name):
             df = pd.read_csv(df_file_name)

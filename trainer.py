@@ -2,12 +2,13 @@ import os
 import torch
 import numpy as np
 import pandas as pd
+import pickle
 from tqdm import tqdm
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from datasets.Sinusoid.sinusoid import sinusoid_dataset, sinusoid_collate
+from datasets.Sinusoid.sinusoid import sinusoid_dataset, sinusoid_collate, SineData
 from utils.ops import kl_divergence, log_normal_pdf
 from utils.visualization import vis_sinusoid_traj
 
@@ -21,9 +22,18 @@ class Trainer_sinusoid:
         self.cv_idx = args.cv_idx
         self.num_data = args.num_data
         self.diverse = args.diverse_data
+        self.batch_size = args.batch_size
 
-        self._data_indexing(self.cv_idx)
-        self._load_dataloader(args.batch_size)
+        self.num_full = args.num_full_x
+        self.num_context = args.num_context
+        self.num_target = args.num_target
+
+        self.sample_context = args.sample_context
+        self.sample_num_target = args.sample_num_target
+        self.sample_pos_target = args.sample_pos_target
+
+        # self._data_indexing(self.cv_idx)
+        self._load_dataloader_val()
         self._make_folder()
 
         self.optimizer = optim.Adam(nn.ParameterList(self.model.parameters()), lr=1e-3)
@@ -33,41 +43,59 @@ class Trainer_sinusoid:
         self.device = torch.device(f"cuda:{args.gpu_num}")
         self.writer = SummaryWriter("./runs/{}".format(self.exp_name))
 
-    def _data_indexing(self, cv_idx):
-        idx_list = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
-        data_idx_num = idx_list[cv_idx]
-        i = data_idx_num[0]
-        j = data_idx_num[1]
+    # def _data_indexing(self, cv_idx):
+    #     idx_list = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]
+    #     data_idx_num = idx_list[cv_idx]
+    #     i = data_idx_num[0]
+    #     j = data_idx_num[1]
+    #
+    #     if self.num_data == 1000:
+    #         test_range = range(200 * i, 200 * (i + 1))
+    #         val_range = range(200 * j, 200 * (j + 1))
+    #         train_range = set(range(1000)) - set(test_range) - set(val_range)
+    #     elif self.num_data == 3000:
+    #         test_range = range(600 * i, 600 * (i + 1))
+    #         val_range = range(600 * j, 600 * (j + 1))
+    #         train_range = set(range(3000)) - set(test_range) - set(val_range)
+    #
+    #     self.val_idx = np.array(val_range)
+    #     self.train_idx = np.array(list(train_range))
 
-        if self.num_data == 1000:
-            test_range = range(200 * i, 200 * (i + 1))
-            val_range = range(200 * j, 200 * (j + 1))
-            train_range = set(range(1000)) - set(test_range) - set(val_range)
-        elif self.num_data == 3000:
-            test_range = range(600 * i, 600 * (i + 1))
-            val_range = range(600 * j, 600 * (j + 1))
-            train_range = set(range(3000)) - set(test_range) - set(val_range)
+    def _load_dataloader_train(self, batch_size):
+        print('Loading a new training dataset')
+        data_train = SineData(num_samples=3000)
+        self.dl_train = DataLoader(dataset=data_train, shuffle=True, batch_size=batch_size)
 
-        self.val_idx = np.array(val_range)
-        self.train_idx = np.array(list(train_range))
+    def _load_dataloader_val(self):
+        # data_val = SineData(num_samples=300)
+        f = open('datasets/Sinusoid/val_data.pickle', 'rb')
+        data_val = pickle.load(f)
+        f.close()
+        self.dl_val = DataLoader(dataset=data_val, shuffle=False, batch_size=len(data_val))
 
-    def _load_dataloader(self, batch_size):
-        if self.noisy_data:
-            if self.num_data == 1000:
-                data_path = './datasets/Sinusoid/sinusoid_new_noisy.csv'
-            elif self.num_data == 3000:
-                if self.diverse:
-                    data_path = './datasets/Sinusoid/sinusoid_noisy_div_3000.csv'
-                else:
-                    data_path = './datasets/Sinusoid/sinusoid_noisy_3000.csv'
-        else:
-            data_path = './datasets/Sinusoid/sinusoid_new_noiseless.csv'
-        data_train = sinusoid_dataset(data_path=data_path, idx=self.train_idx)
-        data_val = sinusoid_dataset(data_path=data_path, idx=self.val_idx)
-        self.dl_train = DataLoader(dataset=data_train, shuffle=True, collate_fn=sinusoid_collate,
-                                   batch_size=batch_size)
-        self.dl_val = DataLoader(dataset=data_val, shuffle=False, collate_fn=sinusoid_collate,
-                                 batch_size=len(data_val))
+
+    # def _load_dataloader(self, batch_size):
+    #     if self.noisy_data:
+    #         if self.num_data == 1000:
+    #             data_path = './datasets/Sinusoid/sinusoid_new_noisy.csv'
+    #         elif self.num_data == 3000:
+    #             if self.diverse:
+    #                 data_path = './datasets/Sinusoid/sinusoid_noisy_div_3000.csv'
+    #             else:
+    #                 data_path = './datasets/Sinusoid/sinusoid_noisy_3000.csv'
+    #     else:
+    #         data_path = './datasets/Sinusoid/sinusoid_new_noiseless.csv'
+    #     # data_train = sinusoid_dataset(data_path=data_path, idx=self.train_idx)
+    #     # data_val = sinusoid_dataset(data_path=data_path, idx=self.val_idx)
+    #     # self.dl_train = DataLoader(dataset=data_train, shuffle=True, collate_fn=sinusoid_collate,
+    #     #                            batch_size=batch_size)
+    #     # self.dl_val = DataLoader(dataset=data_val, shuffle=False, collate_fn=sinusoid_collate,
+    #     #                          batch_size=len(data_val))
+    #
+    #     data_train = SineData(num_samples=3000)
+    #     data_val = SineData(num_samples=300)
+    #     self.dl_train = DataLoader(dataset=data_train, shuffle=True, batch_size=batch_size)
+    #     self.dl_val = DataLoader(dataset=data_val, shuffle=False, batch_size=len(data_val))
 
     def _make_folder(self):
         if not os.path.isdir("./save/{}".format(self.exp_name)):
@@ -87,17 +115,61 @@ class Trainer_sinusoid:
         self.train_instance_num = 0
         self.train_mse = 0.
         self.train_kl = 0.
+        self._load_dataloader_train(self.batch_size)
 
         for i, b in enumerate(tqdm(self.dl_train)):
-            times = b["time"].float().to(self.device)
-            trajs = b["traj"].float().to(self.device)
+            # times = b["time"].float().to(self.device)
+            # trajs = b["traj"].float().to(self.device)
+
+            b = torch.stack(b, 2).squeeze()
+            times = b[0, :, 1].float().to(self.device)
+            trajs = b[:, :, 2:].float().to(self.device)
+
+            # sampling num of context / target
+
+            if (self.sample_context==True) & (self.sample_num_target==True):
+                # n~U(0, 50)
+                num_context = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
+                # num_context = 50
+                context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), num_context, replace=False)
+                context_idx.sort()
+
+                num_target = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
+                # num_target = 50
+                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                              num_target, replace=False)
+                target_idx.sort()
+            elif (self.sample_context==False) & (self.sample_num_target==True):
+                context_idx = np.arange(0, 50, 2)
+                num_target = np.random.choice(np.arange(5, int(self.num_full / 2)), 1)
+                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                              num_target, replace=False)
+                target_idx.sort()
+            elif self.sample_context==False:
+                if self.sample_pos_target == True:
+                    context_idx = np.arange(0, 50, 2)
+                    num_target = 25
+                    target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                                  num_target, replace=False)
+                    target_idx.sort()
+                elif self.sample_pos_target == False:
+                    context_idx = np.arange(0, 50, 2)
+                    target_idx = np.arange(50, 100, 2)
+            else:
+                print('Incorrect condition!')
+                exit()
+
+
+
+            both_idx = np.concatenate([context_idx, target_idx])
 
             self.optimizer.zero_grad()
 
-            pred_mu, pred_sigma, mu_all, sigma_all, mu_context, sigma_context = self.model(trajs, times, training=True)
+            pred_mu, pred_sigma, mu_all, \
+            sigma_all, mu_context, sigma_context = self.model(trajs, times, context_idx, target_idx, training=True)
 
             # mse_loss = torch.mean(torch.pow(pred - trajs, 2))
-            mse_loss = log_normal_pdf(trajs, pred_mu, pred_sigma).mean()
+            mse_loss = log_normal_pdf(trajs[:, both_idx, :], pred_mu, pred_sigma).mean()
 
             kl_loss = kl_divergence(mu_all, sigma_all, mu_context, sigma_context)
 
@@ -118,7 +190,7 @@ class Trainer_sinusoid:
         self.train_kl /= self.train_instance_num
 
         if (epoch + 1) % 2 == 0:
-            vis_sinusoid_traj(trajs[0, :, 0], times, pred_mu[0, :, 0],
+            vis_sinusoid_traj(trajs[0, both_idx, 0], times[both_idx], pred_mu[0, :, 0],
                               epoch, '/' + str(self.exp_name) + '/')
 
     def _validation_phase(self, epoch):
@@ -131,12 +203,28 @@ class Trainer_sinusoid:
 
         with torch.no_grad():
             for i, b in enumerate(self.dl_val):
-                times = b["time"].float().to(self.device)
-                trajs = b["traj"].float().to(self.device)
+                # times = b["time"].float().to(self.device)
+                # trajs = b["traj"].float().to(self.device)
+
+                b = torch.stack(b, 2).squeeze()
+                times = b[0, :, 1].float().to(self.device)
+                trajs = b[:, :, 2:].float().to(self.device)
+
+                # sampling num of context / target
+
+                # n~U(0, 50)
+                context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), int(self.num_full / 2),
+                                               replace=False)
+                context_idx.sort()
+                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
+                                              int(self.num_full / 2), replace=False)
+                target_idx.sort()
+                both_idx = np.concatenate([context_idx, target_idx])
 
                 pred_mu, pred_sigma, mu_all, sigma_all, mu_context, sigma_context = self.model(trajs, times,
+                                                                                               context_idx, target_idx,
                                                                                                training=True)
-                mse_loss = torch.mean(torch.pow(pred_mu - trajs, 2))
+                mse_loss = torch.mean(torch.pow(pred_mu - trajs[:, both_idx, :], 2))
                 kl_loss = kl_divergence(mu_all, sigma_all, mu_context, sigma_context)
 
                 loss = mse_loss + kl_loss

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -18,40 +19,41 @@ class AttentiveNP(nn.Module):
         self.attn = Attn()
         self.dec = Decoder(self.x_size, self.h_size, self.z_size)
 
-    def forward(self, trajs, times, training=True):
+    def forward(self, trajs, times, context_idx, target_idx, training=True):
+        both_idx = np.concatenate([context_idx, target_idx])
         if training:
-            value_for_attn = self.det_enc(times[:25], trajs[:, :25, :])  # BS x traj len x Hidden Dim
+            value_for_attn = self.det_enc(times[context_idx], trajs[:, context_idx, :])  # BS x traj len x Hidden Dim
 
-            emb_x = self.emb_fn(times.unsqueeze(-1))  # traj len x Emb Dim
-            key_for_attn = emb_x[:25, :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED
+            emb_x = self.emb_fn(times[both_idx].unsqueeze(-1))  # traj len x Emb Dim
+            key_for_attn = emb_x[:len(context_idx), :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED
             query_for_attn = emb_x.repeat(trajs.size(0), 1, 1)  # BS x TL x ED
 
             attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)
 
-            mu_all, sigma_all = self.lat_enc(times, trajs)
-            mu_context, sigma_context = self.lat_enc(times[:25], trajs[:, :25, :])
+            mu_all, sigma_all = self.lat_enc(times[both_idx], trajs[:, both_idx, :])
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
 
             epsilon = torch.randn(sigma_all.size()).to(self.device)
             z = mu_all + sigma_all * epsilon
 
-            x_mu, x_sigma = self.dec(times, attn_vec, z)
+            x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)
 
             return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
         else:
-            value_for_attn = self.det_enc(times[:25], trajs[:, :25, :])  # BS x traj len x Hidden Dim
+            value_for_attn = self.det_enc(times[context_idx], trajs[:, context_idx, :])  # BS x traj len x Hidden Dim
 
-            emb_x = self.emb_fn(times.unsqueeze(-1))  # traj len x Emb Dim
-            key_for_attn = emb_x[:25, :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED
+            emb_x = self.emb_fn(times[both_idx].unsqueeze(-1))  # traj len x Emb Dim
+            key_for_attn = emb_x[:len(context_idx), :].repeat(trajs.size(0), 1, 1)  # BS x TL x ED
             query_for_attn = emb_x.repeat(trajs.size(0), 1, 1)  # BS x TL x ED
 
             attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)
 
-            mu_context, sigma_context = self.lat_enc(times[:25], trajs[:, :25, :])
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
 
             epsilon = torch.randn(sigma_context.size()).to(self.device)
             z = mu_context + sigma_context * epsilon
 
-            x_mu, x_sigma = self.dec(times, attn_vec, z)
+            x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)
 
             return x_mu, x_sigma
 
@@ -62,11 +64,17 @@ class DeterministicEncoder(nn.Module):
         self.x_size = x_size
         self.h_size = h_size
 
-        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 40),
+        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, self.h_size))
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, self.h_size))
 
     def forward(self, times, trajs):
         '''
@@ -89,9 +97,9 @@ class DeterministicEncoder(nn.Module):
 class EmbedFunc(nn.Module):
     def __init__(self, x_size, h_size):
         super(EmbedFunc, self).__init__()
-        self.embed_fn = nn.Sequential(nn.Linear(x_size, 40),
+        self.embed_fn = nn.Sequential(nn.Linear(x_size, 128),
                                       nn.ReLU(),
-                                      nn.Linear(40, h_size))
+                                      nn.Linear(128, h_size))
 
     def forward(self, x):
         return self.embed_fn(x)
@@ -122,19 +130,19 @@ class LatentEncoder(nn.Module):
         self.h_size = h_size
         self.x_size = x_size
 
-        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 40),
+        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, self.h_size))
+                                     nn.Linear(128, self.h_size))
 
-        self.latent_mu = nn.Sequential(nn.Linear(self.h_size, 40),
+        self.latent_mu = nn.Sequential(nn.Linear(self.h_size, 128),
                                        nn.ReLU(),
-                                       nn.Linear(40, self.h_size))
+                                       nn.Linear(128, self.h_size))
 
-        self.latent_sigma = nn.Sequential(nn.Linear(self.h_size, 40),
+        self.latent_sigma = nn.Sequential(nn.Linear(self.h_size, 128),
                                           nn.ReLU(),
-                                          nn.Linear(40, self.h_size))
+                                          nn.Linear(128, self.h_size))
 
     def forward(self, times, trajs):
         '''
@@ -167,15 +175,17 @@ class Decoder(nn.Module):
         self.h_size = h_size
         self.z_size = z_size
 
-        self.decoder = nn.Sequential(nn.Linear(1 + self.h_size + self.z_size, 40),
+        self.decoder = nn.Sequential(nn.Linear(1 + self.h_size + self.z_size, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 128),
                                      nn.ReLU())
 
-        self.x_mu = nn.Linear(40, self.x_size)
-        self.x_sigma = nn.Linear(40, self.x_size)
+        self.x_mu = nn.Linear(128, self.x_size)
+        self.x_sigma = nn.Linear(128, self.x_size)
 
     def forward(self, times, h_vector, z_vector):
         '''

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -15,28 +16,29 @@ class NeuralProcess_rev(nn.Module):
         self.det_enc = DeterministicEncoder(self.x_size, self.h_size)
         self.decoder = Decoder(self.x_size, self.h_size, self.z_size)
 
-    def forward(self, trajs, times, training=True):
+    def forward(self, trajs, times, context_idx, target_idx, training=True):
+        both_idx = np.concatenate([context_idx, target_idx])
         if training:
-            mu_all, sigma_all = self.lat_enc(times, trajs)
-            mu_context, sigma_context = self.lat_enc(times[:25], trajs[:, :25, :])
+            mu_all, sigma_all = self.lat_enc(times[both_idx], trajs[:, both_idx, :])
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
 
-            r_vec = self.det_enc(times[:25], trajs[:, :25, :])
+            r_vec = self.det_enc(times[context_idx], trajs[:, context_idx, :])
 
             epsilon = torch.randn(sigma_all.size()).to(self.device)
             z = mu_all + sigma_all * epsilon
 
-            x_mu, x_sigma = self.decoder(times, r_vec, z)
+            x_mu, x_sigma = self.decoder(times[both_idx], r_vec, z)
 
             return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
         else:
-            mu_context, sigma_context = self.lat_enc(times[:25], trajs[:, :25, :])
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
 
-            r_vec = self.det_enc(times[:25], trajs[:, :25, :])
+            r_vec = self.det_enc(times[context_idx], trajs[:, context_idx, :])
 
             epsilon = torch.randn(sigma_context.size()).to(self.device)
             z = mu_context + sigma_context * epsilon
 
-            x_mu, x_sigma = self.decoder(times, r_vec, z)
+            x_mu, x_sigma = self.decoder(times[both_idx], r_vec, z)
 
             return x_mu, x_sigma
 
@@ -47,19 +49,19 @@ class LatentEncoder(nn.Module):
         self.h_size = h_size
         self.x_size = x_size
 
-        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 40),
+        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, self.h_size))
+                                     nn.Linear(128, self.h_size))
 
-        self.latent_mu = nn.Sequential(nn.Linear(self.h_size, 40),
+        self.latent_mu = nn.Sequential(nn.Linear(self.h_size, 128),
                                        nn.ReLU(),
-                                       nn.Linear(40, self.h_size))
+                                       nn.Linear(128, self.h_size))
 
-        self.latent_sigma = nn.Sequential(nn.Linear(self.h_size, 40),
+        self.latent_sigma = nn.Sequential(nn.Linear(self.h_size, 128),
                                           nn.ReLU(),
-                                          nn.Linear(40, self.h_size))
+                                          nn.Linear(128, self.h_size))
 
     def forward(self, times, trajs):
         '''
@@ -90,11 +92,17 @@ class DeterministicEncoder(nn.Module):
         self.x_size = x_size
         self.h_size = h_size
 
-        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 40),
+        self.encoder = nn.Sequential(nn.Linear(self.x_size + 1, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, self.h_size))
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, self.h_size))
 
     def forward(self, times, trajs):
         '''
@@ -123,15 +131,17 @@ class Decoder(nn.Module):
         self.h_size = h_size
         self.z_size = z_size
 
-        self.decoder = nn.Sequential(nn.Linear(self.h_size + self.z_size + 1, 40),
+        self.decoder = nn.Sequential(nn.Linear(self.h_size + self.z_size + 1, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
                                      nn.ReLU(),
-                                     nn.Linear(40, 40),
+                                     nn.Linear(128, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 128),
                                      nn.ReLU())
 
-        self.x_mu = nn.Linear(40, self.x_size)
-        self.x_sigma = nn.Linear(40, self.x_size)
+        self.x_mu = nn.Linear(128, self.x_size)
+        self.x_sigma = nn.Linear(128, self.x_size)
 
     def forward(self, times, h_vector, z_vector):
         '''
