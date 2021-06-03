@@ -4,9 +4,9 @@ from torch import nn
 from torch.nn import functional as F
 
 
-class AttentiveNP_GP(nn.Module):
+class AttentiveNP_plus(nn.Module):
     def __init__(self, args):
-        super(AttentiveNP_GP, self).__init__()
+        super(AttentiveNP_plus, self).__init__()
         self.x_size = args.x_size
         self.h_size = args.h_size
         self.z_size = args.h_size
@@ -125,11 +125,11 @@ class Attn(nn.Module):
 
 
 class SelfAttn(nn.Module):
-    def __init__(self, x_dim, h_dim, z_dim):
+    def __init__(self, h_dim):
         super(SelfAttn, self).__init__()
-        self.q_weight = nn.Linear(x_dim + h_dim + z_dim, 2 * (x_dim + h_dim + z_dim), bias=False)
-        self.k_weight = nn.Linear(x_dim + h_dim + z_dim, 2 * (x_dim + h_dim + z_dim), bias=False)
-        self.v_weight = nn.Linear(x_dim + h_dim + z_dim, 2 * (x_dim + h_dim + z_dim), bias=False)
+        self.q_weight = nn.Linear(h_dim, 2 * h_dim, bias=False)
+        self.k_weight = nn.Linear(h_dim, 2 * h_dim, bias=False)
+        self.v_weight = nn.Linear(h_dim, 2 * h_dim, bias=False)
         self.attn = Attn()
 
     def forward(self, source):
@@ -194,10 +194,9 @@ class Decoder(nn.Module):
         self.h_size = h_size
         self.z_size = z_size
 
-        self.emb_fn = EmbedFunc(x_size, h_size)
-        self.attn = Attn()
+        self.self_attn = SelfAttn(self.h_size)
 
-        self.decoder = nn.Sequential(nn.Linear(2 * (1 + self.h_size + self.z_size), 128),
+        self.decoder = nn.Sequential(nn.Linear(1 + self.h_size + self.z_size, 128),
                                      nn.ReLU(),
                                      nn.Linear(128, 128),
                                      nn.ReLU(),
@@ -206,8 +205,8 @@ class Decoder(nn.Module):
                                      nn.Linear(128, 128),
                                      nn.ReLU())
 
-        self.x_mu = nn.Linear(128, self.x_size)
-        self.x_sigma = nn.Linear(128, self.x_size)
+        self.x_mu = nn.Linear(2 * self.h_size, self.x_size)
+        self.x_sigma = nn.Linear(2 * self.h_size, self.x_size)
 
     def forward(self, times, h_vector, z_vector):
         '''
@@ -218,22 +217,17 @@ class Decoder(nn.Module):
         batch_size, _ = z_vector.size()
         traj_len = times.size()[0]
 
-        emb_x = self.emb_fn(times.unsqueeze(-1))
-        key_for_attn = emb_x.repeat(h_vector.size(0), 1, 1)
-        query_for_attn = emb_x.repeat(h_vector.size(0), 1, 1)
-
-        attn_vec = self.attn(query_for_attn, key_for_attn, )
-
-
         times = times.unsqueeze(0).unsqueeze(2).repeat(batch_size, 1, 1)  # BS x TL x 1
         z_vector = z_vector.unsqueeze(1).repeat(1, traj_len, 1)  # BS x TL x H
 
         self_attn_input = torch.cat((times, h_vector, z_vector), dim=-1)  # BS x TL x (1 + H + H)
-        self_attn_output = self.self_attn(self_attn_input)  # BS x TL x (1 + H + H) * 2
+        self_attn_input = self.decoder(self_attn_input.view(batch_size * traj_len, -1))
+        self_attn_input = self_attn_input.view(batch_size, traj_len, -1)  # BS x TL x H
 
-        input_pairs = self_attn_output.view(batch_size * traj_len, -1)  # BS*TL x (1+H+H) * 2
 
-        h = self.decoder(input_pairs)  # BS*TL x 50
+        self_attn_output = self.self_attn(self_attn_input)  # BS x TL x 2*H
+        h = self_attn_output.view(batch_size * traj_len, -1)  # BS*TL x 2*H
+
         mu = self.x_mu(h)  # BS*TL x x_dim
         sigma = 0.1 + 0.9 * F.softplus(self.x_sigma(h))  # BS*TL x x_dim
         mu = mu.view(batch_size, traj_len, self.x_size)  # BS x TL x x_dim

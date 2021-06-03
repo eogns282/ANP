@@ -12,14 +12,14 @@ class Evaluator_sinusoid:
         self.device = torch.device(f"cuda:{args.gpu_num}")
         self.exp_name = args.exp_name
         self.model = model
+        self.task = args.task
         self.noisy_data = args.noisy_data
         self.cv_idx = args.cv_idx
         self.num_data = args.num_data
         self.diverse = args.diverse_data
-
         self.num_full = args.num_full_x
-        self.num_context = args.num_context
-        self.num_target = args.num_target
+
+        self.sample_strategy = args.sample_strategy
 
         # self._data_indexing(self.cv_idx)
         # self._load_dataloader()
@@ -95,21 +95,27 @@ class Evaluator_sinusoid:
                 times = b[0, :, 1].float().to(self.device)
                 trajs = b[:, :, 2:].float().to(self.device)
 
-                # n~U(0, 50)
-                context_idx = np.random.choice(np.arange(0, int(self.num_full / 2)), int(self.num_full / 2),
-                                               replace=False)
-                context_idx.sort()
-                target_idx = np.random.choice(np.arange(int(self.num_full / 2), self.num_full),
-                                              int(self.num_full / 2), replace=False)
-                target_idx.sort()
+                # sampling num of context / target
+                if self.task == 'extrapolation':
+                    num_context = int(self.num_full / 4)  # 50
+                    context_idx = np.arange(0, num_context, 2)
+                    target_idx = np.arange(num_context, self.num_full, 2)
+
+                elif self.task == 'interpolation':
+                    num_context = int(self.num_full / 4)  # 50
+                    context_idx = np.arange(0, self.num_full, 4)
+                    target_idx = np.arange(2, self.num_full, 4)
+                else:
+                    print('Incorrect task condition!')
+
                 both_idx = np.concatenate([context_idx, target_idx])
 
 
                 pred_mu, pred_sigma = self.model(trajs, times, context_idx, target_idx,
                                                  training=False)
                 mse_loss = torch.mean(torch.pow(pred_mu - trajs[:, both_idx, :], 2))
-                self.mse_context += torch.mean(torch.pow(pred_mu[:, :len(context_idx), :] - trajs[:, :len(context_idx), :], 2))
-                self.mse_target += torch.mean(torch.pow(pred_mu[:, len(context_idx):, :] - trajs[:, len(context_idx):, :], 2))
+                self.mse_context += torch.mean(torch.pow(pred_mu[:, :len(context_idx), :] - trajs[:, context_idx, :], 2))
+                self.mse_target += torch.mean(torch.pow(pred_mu[:, len(context_idx):, :] - trajs[:, target_idx, :], 2))
                 kl_loss = 0.
 
                 loss = mse_loss + kl_loss
@@ -134,7 +140,7 @@ class Evaluator_sinusoid:
         df_file_name = "./test_results/{}/sinusoid.csv".format(self.exp_name)
         df_res = pd.DataFrame(
             {"Name": [self.exp_name], "Loss": [self.test_loss], "best_epoch": [self.best_epoch],
-             "cv-idx": [self.cv_idx], "MSE": [self.test_mse], "KL": [self.test_kl],
+             "MSE": [self.test_mse], "KL": [self.test_kl],
              "context_mse": [self.mse_context.item()], "target_mse": [self.mse_target.item()]})
 
         if os.path.isfile(df_file_name):

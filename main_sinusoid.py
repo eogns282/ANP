@@ -5,6 +5,7 @@ from models.neuralprocess import NeuralProcess
 from models.neuralprocess_rev import NeuralProcess_rev
 from models.attentiveNP import AttentiveNP
 from models.attentiveNP_rev import AttentiveNP_rev
+from models.attentiveNP_GP import AttentiveNP_plus
 from trainer import Trainer_sinusoid
 from evaluator import Evaluator_sinusoid
 from datasets.Sinusoid.sinusoid import SineData
@@ -18,12 +19,13 @@ def boolean_string(s):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp-name', type=str, default='temp_inter')
-parser.add_argument('--test-phase', type=boolean_string, default=False)
+parser.add_argument('--test-phase', type=boolean_string, default=True)
 parser.add_argument('--epochs', type=int, default=1500)
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--gpu-num', type=int, default=0)
 
-parser.add_argument('--model-type', type=str, default='np', choices=['np', 'np_rev', 'anp', 'anp_rev'])
+parser.add_argument('--model-type', type=str, default='anp_rev', choices=['np', 'np_rev', 'anp',
+                                                                           'anp_rev', 'anp_plus'])
 parser.add_argument('--h-size', type=int, default=128)
 
 parser.add_argument('--x-size', type=int, default=1)
@@ -52,6 +54,8 @@ elif args.model_type == 'np':
     NP = NeuralProcess(args).to(device)
 elif args.model_type == 'np_rev':
     NP = NeuralProcess_rev(args).to(device)
+elif args.model_type == 'anp_plus':
+    NP = AttentiveNP_plus(args).to(device)
 else:
     print('Incorrect model type')
 # pytorch_total_params = sum(p.numel() for p in NP.parameters())
