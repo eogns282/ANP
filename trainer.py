@@ -354,7 +354,7 @@ class Trainer_sinusoid:
         df_file_name = "./results/{}/sinusoid.csv".format(self.exp_name)
         df_res = pd.DataFrame(
             {"Name": [self.exp_name], "Loss": [self.best_loss], "best_epoch": [self.best_epoch],
-             "cv-idx": [self.cv_idx], 'MSE': [self.best_mse], 'KL': [self.best_kl]})
+             'MSE': [self.best_mse], 'KL': [self.best_kl]})
         if os.path.isfile(df_file_name):
             df = pd.read_csv(df_file_name)
             df = df.append(df_res)
