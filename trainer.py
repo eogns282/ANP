@@ -59,7 +59,7 @@ class Trainer_sinusoid:
 
     def _load_dataloader_train(self, batch_size):
         print('Loading a new training dataset')
-        data_train = SineData(num_samples=3000)
+        data_train = SineData(num_samples=1000)
         self.dl_train = DataLoader(dataset=data_train, shuffle=True, batch_size=batch_size)
 
     def _load_dataloader_val(self):
@@ -158,14 +158,18 @@ class Trainer_sinusoid:
                     num_target = int(int(self.num_full/ 2) / 2)  # 25
                     all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
                     context_idx = all_idx[:num_context]  # 1 3
+                    context_idx.sort()
                     target_idx = all_idx[num_context:]  # 2 4
+                    target_idx.sort()
 
                 elif self.sample_strategy == 3:
                     num_context = np.random.choice(np.arange(3, self.num_full), 1)[0]  # n~U(3, 100)
                     num_target = np.random.choice(np.arange(0, self.num_full - num_context), 1)[0]  # m~n+U(0, 100-n)
                     all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # m + n
                     context_idx = all_idx[:num_context]
+                    context_idx.sort()
                     target_idx = all_idx[num_context:]
+                    target_idx.sort()
 
                 else:
                     print('Incorrect sampling strategy')
@@ -230,21 +234,15 @@ class Trainer_sinusoid:
 
                 # sampling num of context / target
                 if self.task == 'extrapolation':
-                    num_context = int(int(self.num_full / 2) / 2)  # 25
-                    num_target = int(int(self.num_full / 2) / 2)  # 25
-                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
-                    all_idx.sort()
-                    context_idx = all_idx[:num_context]
-                    target_idx = all_idx[num_context:]
+                    num_context = int(self.num_full / 4)  # 50
+                    context_idx = np.arange(0, num_context, 2)
+                    target_idx = np.arange(num_context, self.num_full, 2)
                 elif self.task == 'interpolation':
-                    num_context = int(int(self.num_full/ 2) / 2)  # 25
-                    num_target = int(int(self.num_full/ 2) / 2)  # 25
-                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
-                    context_idx = all_idx[:num_context]  # 1 3
-                    target_idx = all_idx[num_context:]  # 2 4
+                    num_context = int(self.num_full / 4)  # 50
+                    context_idx = np.arange(0, self.num_full, 4)
+                    target_idx = np.arange(2, self.num_full, 4)
                 else:
                     print('Incorrect task condition!')
-
 
                 both_idx = np.concatenate([context_idx, target_idx])
                 pred_mu, pred_sigma, mu_all, sigma_all, mu_context, sigma_context = self.model(trajs, times,

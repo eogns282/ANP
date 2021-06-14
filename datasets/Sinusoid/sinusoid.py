@@ -97,7 +97,7 @@ class SineData(Dataset):
             y = a * torch.sin(x * b + c)
 
             # For noisy version
-            noise = torch.randn(y.shape) * 0.03
+            noise = torch.randn(y.shape) * 0.01
             y += noise
 
             traj_idx = torch.ones_like(x) * i

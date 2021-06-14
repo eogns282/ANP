@@ -6,6 +6,7 @@ from models.neuralprocess_rev import NeuralProcess_rev
 from models.attentiveNP import AttentiveNP
 from models.attentiveNP_rev import AttentiveNP_rev
 from models.attentiveNP_GP import AttentiveNP_plus
+from models.latentODE import LatentODE
 from trainer import Trainer_sinusoid
 from evaluator import Evaluator_sinusoid
 from datasets.Sinusoid.sinusoid import SineData
@@ -24,15 +25,15 @@ parser.add_argument('--epochs', type=int, default=1500)
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--gpu-num', type=int, default=0)
 
-parser.add_argument('--model-type', type=str, default='anp_rev', choices=['np', 'np_rev', 'anp',
-                                                                           'anp_rev', 'anp_plus'])
+parser.add_argument('--model-type', type=str, default='latent_ode', choices=['np', 'np_rev', 'anp',
+                                                                     'anp_rev', 'anp_plus', 'latent_ode'])
 parser.add_argument('--h-size', type=int, default=128)
 
 parser.add_argument('--x-size', type=int, default=1)
 parser.add_argument('--num-full-x', type=int, default=100)
 
-parser.add_argument('--task', type=str, default='interpolation', choices=['extrapolation', 'interpolation'])
-parser.add_argument('--sample-strategy', type=int, default=1, choices=[1, 2, 3])
+parser.add_argument('--task', type=str, default='extrapolation', choices=['extrapolation', 'interpolation'])
+parser.add_argument('--sample-strategy', type=int, default=2, choices=[1, 2, 3])
 
 # only the case when using saved data
 parser.add_argument('--cv-idx', type=int, default=0, choices=[0, 1, 2, 3, 4])
@@ -56,6 +57,8 @@ elif args.model_type == 'np_rev':
     NP = NeuralProcess_rev(args).to(device)
 elif args.model_type == 'anp_plus':
     NP = AttentiveNP_plus(args).to(device)
+elif args.model_type == 'latent_ode':
+    NP = LatentODE(args).to(device)
 else:
     print('Incorrect model type')
 # pytorch_total_params = sum(p.numel() for p in NP.parameters())
