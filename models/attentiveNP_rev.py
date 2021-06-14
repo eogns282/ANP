@@ -48,10 +48,12 @@ class AttentiveNP_rev(nn.Module):
 
             attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)
 
-            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
+            # mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
+            mu_context, _ = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
 
-            epsilon = torch.randn(sigma_context.size()).to(self.device)
-            z = mu_context + sigma_context * epsilon
+            # epsilon = torch.randn(sigma_context.size()).to(self.device)
+            # z = mu_context + sigma_context * epsilon
+            z = mu_context
 
             x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)
 

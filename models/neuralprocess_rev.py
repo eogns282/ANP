@@ -31,12 +31,14 @@ class NeuralProcess_rev(nn.Module):
 
             return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
         else:
-            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
+            # mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
+            mu_context, _ = self.lat_enc(times[context_idx], trajs[:, context_idx, :])
 
             r_vec = self.det_enc(times[context_idx], trajs[:, context_idx, :])
 
-            epsilon = torch.randn(sigma_context.size()).to(self.device)
-            z = mu_context + sigma_context * epsilon
+            # epsilon = torch.randn(sigma_context.size()).to(self.device)
+            # z = mu_context + sigma_context * epsilon
+            z = mu_context
 
             x_mu, x_sigma = self.decoder(times[both_idx], r_vec, z)
 
