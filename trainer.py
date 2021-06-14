@@ -234,7 +234,7 @@ class Trainer_sinusoid:
 
                 # sampling num of context / target
                 if self.task == 'extrapolation':
-                    num_context = int(self.num_full / 4)  # 50
+                    num_context = int(self.num_full / 2)  # 50
                     context_idx = np.arange(0, num_context, 2)
                     target_idx = np.arange(num_context, self.num_full, 2)
                 elif self.task == 'interpolation':
