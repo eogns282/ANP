@@ -27,10 +27,12 @@ class NeuralProcess(nn.Module):
 
             return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
         else:
-            mu_context, sigma_context = self.encoder(times[context_idx], trajs[:, context_idx, :])
+            # mu_context, sigma_context = self.encoder(times[context_idx], trajs[:, context_idx, :])
+            mu_context, _ = self.encoder(times[context_idx], trajs[:, context_idx, :])
 
-            epsilon = torch.randn(sigma_context.size()).to(self.device)
-            z = mu_context + sigma_context * epsilon
+            # epsilon = torch.randn(sigma_context.size()).to(self.device)
+            # z = mu_context + sigma_context * epsilon
+            z = mu_context
 
             x_mu, x_sigma = self.decoder(times[both_idx], z)
 
