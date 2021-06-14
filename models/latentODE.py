@@ -19,8 +19,9 @@ class LatentODE(nn.Module):
         self.decoder = Decoder(self.x_size, self.h_size)
 
     def forward(self, trajs, times, context_idx, target_idx, training=True):
-        both_idx = np.concatenate([context_idx, target_idx])  # 1 3 2 4
-        both_idx.sort()  # 1 2 3 4
+        both_idx = np.concatenate([context_idx, target_idx])  # 0 2 1 3
+        temp_idx = np.argsort(both_idx.copy())  # 0 2 1 3
+        both_idx.sort()  # 0 1 2 3
         times = times.to(self.device)
         if training:
             mu_all, sigma_all = self.encoder(times[both_idx], trajs[:, both_idx, :], self.ode_function)
@@ -32,7 +33,9 @@ class LatentODE(nn.Module):
             epsilon = torch.randn(sigma_all.size()).to(self.device)
             z = mu_all + sigma_all * epsilon
 
-            x_mu, x_sigma = self.decoder(times[both_idx], z, self.ode_function)
+            x_mu, x_sigma = self.decoder(times[both_idx], z, self.ode_function)  # 0 1 2 3
+            x_mu = x_mu[:, temp_idx, :]  # 0 2 1 3
+            x_sigma = x_sigma[:, temp_idx, :]  # 0 2 1 3
 
             return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
         else:
@@ -43,7 +46,9 @@ class LatentODE(nn.Module):
             # z = mu_context + sigma_context * epsilon
             z = mu_context
 
-            x_mu, x_sigma = self.decoder(times[both_idx], z, self.ode_function)
+            x_mu, x_sigma = self.decoder(times[both_idx], z, self.ode_function)  # 1 2 3 4
+            x_mu = x_mu[:, temp_idx, :]
+            x_sigma = x_sigma[:, temp_idx, :]
 
             return x_mu, x_sigma
 
