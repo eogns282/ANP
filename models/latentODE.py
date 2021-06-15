@@ -77,16 +77,24 @@ class Encoder(nn.Module):
         times: (Trja Len)
         '''
         h_vector = torch.zeros(trajs.size(0), self.h_size).to(self.device)
+        traj_len = len(times)
 
         for i, _ in enumerate(times):
             # flow
+            # if i != 0:
+            #     h_vector = odeint(ode_function, h_vector,
+            #                       torch.Tensor([times[i-1], times[i]]).to(self.device), method='rk4',
+            #                       rtol=1e-3, atol=1e-4).permute(1, 0, 2)
+            #     h_vector = h_vector[:, -1, :]
+            # # jump
+            # x = trajs[:, i, :]
             if i != 0:
                 h_vector = odeint(ode_function, h_vector,
-                                  torch.Tensor([times[i-1], times[i]]).to(self.device), method='rk4',
+                                  torch.Tensor([times[traj_len-i], times[traj_len-1-i]]).to(self.device), method='rk4',
                                   rtol=1e-3, atol=1e-4).permute(1, 0, 2)
                 h_vector = h_vector[:, -1, :]
             # jump
-            x = trajs[:, i, :]
+            x = trajs[:, traj_len-1-i, :]
             h_vector = self.rnncell(x, h_vector)
 
         mu = self.latent_mu(h_vector)

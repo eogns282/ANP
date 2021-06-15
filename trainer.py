@@ -131,8 +131,10 @@ class Trainer_sinusoid:
                 elif self.sample_strategy == 2:
                     num_context = int(int(self.num_full / 2) / 2)  # 25
                     num_target = int(int(self.num_full / 2) / 2)  # 25
-                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
+                    # all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
+                    all_idx = np.random.choice(np.arange(1, self.num_full), num_context + num_target - 1, replace=False)
                     all_idx.sort()
+                    all_idx = np.concatenate((np.array([0]), all_idx))
                     context_idx = all_idx[:num_context]
                     target_idx = all_idx[num_context:]
 
@@ -156,7 +158,9 @@ class Trainer_sinusoid:
                 elif self.sample_strategy == 2:
                     num_context = int(int(self.num_full/ 2) / 2)  # 25
                     num_target = int(int(self.num_full/ 2) / 2)  # 25
-                    all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
+                    # all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # 50
+                    all_idx = np.random.choice(np.arange(1, self.num_full), num_context + num_target - 1, replace=False)
+                    all_idx = np.concatenate((np.array([0]), all_idx))
                     context_idx = all_idx[:num_context]  # 1 3
                     context_idx.sort()
                     target_idx = all_idx[num_context:]  # 2 4
