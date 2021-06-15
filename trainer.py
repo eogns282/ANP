@@ -238,13 +238,23 @@ class Trainer_sinusoid:
 
                 # sampling num of context / target
                 if self.task == 'extrapolation':
-                    num_context = int(self.num_full / 2)  # 50
-                    context_idx = np.arange(0, num_context, 2)
-                    target_idx = np.arange(num_context, self.num_full, 2)
+                    if self.sample_strategy == 1:
+                        num_context = int(self.num_full / 2)  # 50
+                        context_idx = np.arange(0, num_context)
+                        target_idx = np.arange(num_context, self.num_full)
+                    elif self.sample_strategy == 2:
+                        num_context = int(self.num_full / 2)  # 50
+                        context_idx = np.arange(0, num_context, 2)
+                        target_idx = np.arange(num_context, self.num_full, 2)
                 elif self.task == 'interpolation':
-                    num_context = int(self.num_full / 4)  # 50
-                    context_idx = np.arange(0, self.num_full, 4)
-                    target_idx = np.arange(2, self.num_full, 4)
+                    if self.sample_strategy == 1:
+                        num_context = int(self.num_full / 2)  # 50
+                        context_idx = np.arange(0, self.num_full, 2)
+                        target_idx = np.arange(1, self.num_full, 2)
+                    elif self.sample_strategy == 2:
+                        num_context = int(self.num_full / 4)  # 50
+                        context_idx = np.arange(0, self.num_full, 4)
+                        target_idx = np.arange(2, self.num_full, 4)
                 else:
                     print('Incorrect task condition!')
 
