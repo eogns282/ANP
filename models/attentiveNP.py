@@ -49,7 +49,8 @@ class AttentiveNP(nn.Module):
             attn_vec = self.attn(query_for_attn, key_for_attn, value_for_attn)  # 1 3 2 4
 
             # mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])  # 1 3
-            mu_context, _ = self.lat_enc(times[context_idx], trajs[:, context_idx, :])  # 1 3
+            mu_all, sigma_all = self.lat_enc(times[both_idx], trajs[:, both_idx, :])  # 1 3 2 4
+            mu_context, sigma_context = self.lat_enc(times[context_idx], trajs[:, context_idx, :])  # 1 3
 
             # epsilon = torch.randn(sigma_context.size()).to(self.device)  # 1 3
             # z = mu_context + sigma_context * epsilon  # 1 3
@@ -57,7 +58,7 @@ class AttentiveNP(nn.Module):
 
             x_mu, x_sigma = self.dec(times[both_idx], attn_vec, z)  # 1 3 2 4
 
-            return x_mu, x_sigma
+            return x_mu, x_sigma, mu_all, sigma_all, mu_context, sigma_context
 
 
 class DeterministicEncoder(nn.Module):

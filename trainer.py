@@ -9,6 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from datasets.Sinusoid.sinusoid import sinusoid_dataset, sinusoid_collate, SineData
+from datasets.GP.gp import GPdata
 from utils.ops import kl_divergence, log_normal_pdf
 from utils.visualization import vis_sinusoid_traj
 
@@ -29,7 +30,6 @@ class Trainer_sinusoid:
         self.sample_strategy = args.sample_strategy
 
         # self._data_indexing(self.cv_idx)
-        self._load_dataloader_val()
         self._make_folder()
 
         self.optimizer = optim.Adam(nn.ParameterList(self.model.parameters()), lr=1e-3)
@@ -59,14 +59,16 @@ class Trainer_sinusoid:
 
     def _load_dataloader_train(self, batch_size):
         print('Loading a new training dataset')
-        data_train = SineData(num_samples=1000)
+        # data_train = SineData(num_samples=1000)
+        data_train = GPdata(num_samples=batch_size)
         self.dl_train = DataLoader(dataset=data_train, shuffle=True, batch_size=batch_size)
 
     def _load_dataloader_val(self):
         # data_val = SineData(num_samples=300)
-        f = open('datasets/Sinusoid/val_data.pickle', 'rb')
-        data_val = pickle.load(f)
-        f.close()
+        # f = open('datasets/Sinusoid/val_data.pickle', 'rb')
+        # data_val = pickle.load(f)
+        # f.close()
+        data_val = GPdata(num_samples=32)
         self.dl_val = DataLoader(dataset=data_val, shuffle=False, batch_size=len(data_val))
 
 
@@ -121,6 +123,9 @@ class Trainer_sinusoid:
             times = b[0, :, 1].float().to(self.device)
             trajs = b[:, :, 2:].float().to(self.device)
 
+            trajs = trajs[:, times.argsort(), :]
+            times = times[times.argsort()]
+
             # sampling num of context / target
             if self.task == 'extrapolation':
                 if self.sample_strategy == 1:
@@ -167,7 +172,7 @@ class Trainer_sinusoid:
                     target_idx.sort()
 
                 elif self.sample_strategy == 3:
-                    num_context = np.random.choice(np.arange(3, self.num_full), 1)[0]  # n~U(3, 100)
+                    num_context = np.random.choice(np.arange(3, int(int(self.num_full/ 2) / 2)), 1)[0]  # n~U(3, 100)
                     num_target = np.random.choice(np.arange(0, self.num_full - num_context), 1)[0]  # m~n+U(0, 100-n)
                     all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # m + n
                     context_idx = all_idx[:num_context]
@@ -217,6 +222,7 @@ class Trainer_sinusoid:
             vis_sinusoid_traj(trajs[0, context_idx, 0], times[context_idx],
                               trajs[0, target_idx, 0], times[target_idx],
                               pred_mu[0, :num_context, 0], pred_mu[0, num_context:, 0],
+                              pred_sigma[0, :num_context, 0], pred_sigma[0, num_context:, 0],
                               epoch, '/' + str(self.exp_name) + '/')
 
     def _validation_phase(self, epoch):
@@ -226,6 +232,8 @@ class Trainer_sinusoid:
         self.val_instance_num = 0
         self.val_mse = 0.
         self.val_kl = 0.
+
+        self._load_dataloader_val()
 
         with torch.no_grad():
             for i, b in enumerate(self.dl_val):
@@ -255,13 +263,21 @@ class Trainer_sinusoid:
                         num_context = int(self.num_full / 4)  # 50
                         context_idx = np.arange(0, self.num_full, 4)
                         target_idx = np.arange(2, self.num_full, 4)
+                    elif self.sample_strategy == 3:
+                        num_context = np.random.choice(np.arange(3, int(int(self.num_full/2)/2)), 1)[0]  # n~U(3, 100)
+                        num_target = np.random.choice(np.arange(0, self.num_full - num_context), 1)[0]  # m~n+U(0, 100-n)
+                        all_idx = np.random.choice(self.num_full, num_context + num_target, replace=False)  # m + n
+                        context_idx = all_idx[:num_context]
+                        context_idx.sort()
+                        target_idx = all_idx[num_context:]
+                        target_idx.sort()
                 else:
                     print('Incorrect task condition!')
 
                 both_idx = np.concatenate([context_idx, target_idx])
                 pred_mu, pred_sigma, mu_all, sigma_all, mu_context, sigma_context = self.model(trajs, times,
                                                                                                context_idx, target_idx,
-                                                                                               training=True)
+                                                                                               training=False)
                 mse_loss = torch.mean(torch.pow(pred_mu - trajs[:, both_idx, :], 2))
                 kl_loss = kl_divergence(mu_all, sigma_all, mu_context, sigma_context)
 
@@ -319,6 +335,7 @@ class Trainer_sinusoid:
             vis_sinusoid_traj(trajs[0, context_idx, 0], times[context_idx],
                               trajs[0, target_idx, 0], times[target_idx],
                               pred_mu[0, :num_context, 0], pred_mu[0, num_context:, 0],
+                              pred_sigma[0, :num_context, 0], pred_sigma[0, num_context:, 0],
                               epoch, '/' + str(self.exp_name) + '/', val=True)
 
     def _logger_scalar(self, epoch):

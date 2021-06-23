@@ -20,24 +20,24 @@ def boolean_string(s):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp-name', type=str, default='temp_inter')
-parser.add_argument('--test-phase', type=boolean_string, default=True)
+parser.add_argument('--test-phase', type=boolean_string, default=False)
 parser.add_argument('--epochs', type=int, default=1500)
-parser.add_argument('--batch-size', type=int, default=32)
+parser.add_argument('--batch-size', type=int, default=16)
 parser.add_argument('--gpu-num', type=int, default=0)
 
-parser.add_argument('--model-type', type=str, default='latent_ode', choices=['np', 'np_rev', 'anp',
+parser.add_argument('--model-type', type=str, default='anp', choices=['np', 'np_rev', 'anp',
                                                                      'anp_rev', 'anp_plus', 'latent_ode'])
 parser.add_argument('--h-size', type=int, default=128)
 
 parser.add_argument('--x-size', type=int, default=1)
 parser.add_argument('--num-full-x', type=int, default=100)
 
-parser.add_argument('--task', type=str, default='extrapolation', choices=['extrapolation', 'interpolation'])
-parser.add_argument('--sample-strategy', type=int, default=2, choices=[1, 2, 3])
+parser.add_argument('--task', type=str, default='interpolation', choices=['extrapolation', 'interpolation'])
+parser.add_argument('--sample-strategy', type=int, default=3, choices=[1, 2, 3])
 
 # only the case when using saved data
 parser.add_argument('--cv-idx', type=int, default=0, choices=[0, 1, 2, 3, 4])
-parser.add_argument('--num-data', type=int, default=3000, choices=[1000, 3000])
+parser.add_argument('--num-data', type=int, default=36, choices=[1000, 3000])
 parser.add_argument('--noisy-data', type=boolean_string, default=True)
 parser.add_argument('--diverse-data', type=boolean_string, default=True)
 
